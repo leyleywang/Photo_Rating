@@ -38,11 +38,19 @@
           @click="openDeaiModal(image)"
         >
           <div class="image-list-preview">
-            <div class="sample-image-placeholder" style="height: 150px;">
-              🖼️
+            <div class="deai-image-box">
+              <img 
+                :src="getImageSrc(image, 'original')" 
+                alt="Original"
+                @error="handleImageError($event, image, 'original')"
+              />
             </div>
-            <div class="sample-image-placeholder" style="height: 150px;">
-              ✨
+            <div class="deai-image-box">
+              <img 
+                :src="getImageSrc(image, 'deai')" 
+                alt="DeAI"
+                @error="handleImageError($event, image, 'deai')"
+              />
             </div>
           </div>
           <div class="image-list-info">
@@ -84,6 +92,8 @@ const fileInput = ref(null)
 const loading = ref(false)
 const dragover = ref(false)
 
+const imagePreviewCache = ref(new Map())
+
 onMounted(async () => {
   await loadDeaiImages()
 })
@@ -96,6 +106,24 @@ const loadDeaiImages = async () => {
     console.error('加载去AI味图片失败:', error)
     deaiImages.value = []
   }
+}
+
+const getImageSrc = (image, type = 'original') => {
+  const cacheKey = `${image.id}-${type}`
+  if (imagePreviewCache.value.has(cacheKey)) {
+    return imagePreviewCache.value.get(cacheKey)
+  }
+  if (type === 'original' && image.filename) {
+    return `http://localhost:3000/uploads/${image.filename}`
+  }
+  if (type === 'deai' && image.deaiVersion) {
+    return `http://localhost:3000/uploads/${image.deaiVersion}`
+  }
+  return ''
+}
+
+const handleImageError = (event, image, type) => {
+  event.target.style.display = 'none'
 }
 
 const triggerUpload = () => {
@@ -122,19 +150,39 @@ const processFile = async (file) => {
   
   try {
     const reader = new FileReader()
-    reader.onload = (e) => {
-      selectedImagePreview.value = e.target?.result
-    }
+    const previewPromise = new Promise((resolve) => {
+      reader.onload = (e) => {
+        selectedImagePreview.value = e.target?.result
+        resolve(e.target?.result)
+      }
+    })
     reader.readAsDataURL(file)
+    const preview = await previewPromise
     
     const formData = new FormData()
     formData.append('image', file)
     
     const uploadResponse = await imageApi.uploadImage(formData)
     selectedImage.value = uploadResponse.data
+    
+    if (preview) {
+      imagePreviewCache.value.set(`${selectedImage.value.id}-original`, preview)
+      imagePreviewCache.value.set(`${selectedImage.value.id}-deai`, preview)
+    }
+    
     deaiModalVisible.value = true
   } catch (error) {
     console.error('上传失败:', error)
+    
+    const reader = new FileReader()
+    const previewPromise = new Promise((resolve) => {
+      reader.onload = (e) => {
+        selectedImagePreview.value = e.target?.result
+        resolve(e.target?.result)
+      }
+    })
+    reader.readAsDataURL(file)
+    const preview = await previewPromise
     
     selectedImage.value = {
       id: 'deai-' + Date.now(),
@@ -142,6 +190,12 @@ const processFile = async (file) => {
       originalName: file.name,
       uploadDate: new Date()
     }
+    
+    if (preview) {
+      imagePreviewCache.value.set(`${selectedImage.value.id}-original`, preview)
+      imagePreviewCache.value.set(`${selectedImage.value.id}-deai`, preview)
+    }
+    
     deaiModalVisible.value = true
   } finally {
     loading.value = false
@@ -153,7 +207,12 @@ const processFile = async (file) => {
 
 const openDeaiModal = (image) => {
   selectedImage.value = image
-  selectedImagePreview.value = ''
+  const originalSrc = getImageSrc(image, 'original')
+  if (originalSrc && imagePreviewCache.value.has(`${image.id}-original`)) {
+    selectedImagePreview.value = imagePreviewCache.value.get(`${image.id}-original`)
+  } else {
+    selectedImagePreview.value = originalSrc
+  }
   deaiModalVisible.value = true
 }
 

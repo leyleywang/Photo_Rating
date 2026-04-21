@@ -5,15 +5,15 @@
         <button class="modal-close" @click="close">&times;</button>
         
         <div class="modal-image-container">
-          <div v-if="isSampleImage" class="sample-image-placeholder">
-            🖼️
-          </div>
           <img 
-            v-else
-            :src="imagePreview" 
+            v-if="displayImage"
+            :src="displayImage" 
             :alt="image?.originalName || 'Image'" 
             class="modal-image"
           />
+          <div v-else class="sample-image-placeholder">
+            🖼️
+          </div>
         </div>
         
         <div class="modal-body">
@@ -113,8 +113,14 @@ const emit = defineEmits(['update:visible', 'close'])
 
 const generatingPrompt = ref(false)
 
-const isSampleImage = computed(() => {
-  return props.image?.id?.startsWith('sample')
+const displayImage = computed(() => {
+  if (props.imagePreview) {
+    return props.imagePreview
+  }
+  if (props.image?.filename && !props.image?.id?.startsWith('sample')) {
+    return `http://localhost:3000/uploads/${props.image.filename}`
+  }
+  return ''
 })
 
 const close = () => {

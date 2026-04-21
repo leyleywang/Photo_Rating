@@ -12,9 +12,11 @@
         class="image-card"
         @click="openRatingModal(image)"
       >
-        <div class="sample-image-placeholder">
-          🖼️
-        </div>
+        <img 
+          :src="getImageSrc(image)" 
+          :alt="image.originalName"
+          @error="handleImageError($event, image)"
+        />
         <div class="image-card-info">
           <div class="image-card-rating">
             <span class="rating-badge">{{ image.rating?.total || '--' }}</span>
@@ -31,7 +33,6 @@
     </div>
     
     <button class="floating-button" @click="triggerUpload">
-      <span class="floating-button-text">上传图片</span>
       +
     </button>
     
@@ -66,6 +67,8 @@ const selectedImage = ref(null)
 const selectedImagePreview = ref('')
 const fileInput = ref(null)
 const loading = ref(false)
+
+const imagePreviewCache = ref(new Map())
 
 onMounted(async () => {
   await loadHighScoreImages()
@@ -120,6 +123,20 @@ const getMockHighScoreImages = () => [
   }
 ]
 
+const getImageSrc = (image) => {
+  if (imagePreviewCache.value.has(image.id)) {
+    return imagePreviewCache.value.get(image.id)
+  }
+  if (image.filename && !image.id.startsWith('sample')) {
+    return `http://localhost:3000/uploads/${image.filename}`
+  }
+  return ''
+}
+
+const handleImageError = (event, image) => {
+  event.target.style.display = 'none'
+}
+
 const triggerUpload = () => {
   fileInput.value?.click()
 }
@@ -132,10 +149,14 @@ const handleFileSelect = async (event) => {
   
   try {
     const reader = new FileReader()
-    reader.onload = (e) => {
-      selectedImagePreview.value = e.target?.result
-    }
+    const previewPromise = new Promise((resolve) => {
+      reader.onload = (e) => {
+        selectedImagePreview.value = e.target?.result
+        resolve(e.target?.result)
+      }
+    })
     reader.readAsDataURL(file)
+    const preview = await previewPromise
     
     const formData = new FormData()
     formData.append('image', file)
@@ -148,9 +169,23 @@ const handleFileSelect = async (event) => {
     selectedImage.value = rateResponse.data
     ratingModalVisible.value = true
     
+    if (preview) {
+      imagePreviewCache.value.set(uploadedImage.id, preview)
+    }
+    
     highScoreImages.value.unshift(rateResponse.data)
   } catch (error) {
     console.error('上传或评分失败:', error)
+    
+    const reader = new FileReader()
+    const previewPromise = new Promise((resolve) => {
+      reader.onload = (e) => {
+        selectedImagePreview.value = e.target?.result
+        resolve(e.target?.result)
+      }
+    })
+    reader.readAsDataURL(file)
+    const preview = await previewPromise
     
     selectedImage.value = {
       id: 'uploaded-' + Date.now(),
@@ -175,7 +210,12 @@ const handleFileSelect = async (event) => {
        selectedImage.value.rating.scenery) / 3
     )
     
+    if (preview) {
+      imagePreviewCache.value.set(selectedImage.value.id, preview)
+    }
+    
     ratingModalVisible.value = true
+    highScoreImages.value.unshift(selectedImage.value)
   } finally {
     loading.value = false
     if (fileInput.value) {
@@ -186,7 +226,11 @@ const handleFileSelect = async (event) => {
 
 const openRatingModal = (image) => {
   selectedImage.value = image
-  selectedImagePreview.value = ''
+  if (imagePreviewCache.value.has(image.id)) {
+    selectedImagePreview.value = imagePreviewCache.value.get(image.id)
+  } else {
+    selectedImagePreview.value = ''
+  }
   ratingModalVisible.value = true
 }
 </script>
