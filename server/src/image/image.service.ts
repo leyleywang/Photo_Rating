@@ -3,6 +3,9 @@ import { v4 as uuidv4 } from 'uuid';
 import { UploadedImage, ImageRating, HighScoreReasons } from './image.types';
 import * as path from 'path';
 import * as fs from 'fs';
+import { promisify } from 'util';
+
+const copyFile = promisify(fs.copyFile);
 
 @Injectable()
 export class ImageService {
@@ -108,7 +111,19 @@ export class ImageService {
       throw new Error('Image not found');
     }
 
-    image.deaiVersion = `deai_${image.filename}`;
+    const ext = path.extname(image.filename);
+    const baseName = path.basename(image.filename, ext);
+    const deaiFilename = `${baseName}_deai${ext}`;
+    
+    const uploadsDir = this.getUploadsDir();
+    const sourcePath = path.join(uploadsDir, image.filename);
+    const destPath = path.join(uploadsDir, deaiFilename);
+
+    if (fs.existsSync(sourcePath)) {
+      await copyFile(sourcePath, destPath);
+    }
+
+    image.deaiVersion = deaiFilename;
     this.uploadedImages.set(id, image);
     return image;
   }

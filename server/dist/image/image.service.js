@@ -10,6 +10,9 @@ exports.ImageService = void 0;
 const common_1 = require("@nestjs/common");
 const uuid_1 = require("uuid");
 const path = require("path");
+const fs = require("fs");
+const util_1 = require("util");
+const copyFile = (0, util_1.promisify)(fs.copyFile);
 let ImageService = class ImageService {
     constructor() {
         this.uploadedImages = new Map();
@@ -103,7 +106,16 @@ let ImageService = class ImageService {
         if (!image) {
             throw new Error('Image not found');
         }
-        image.deaiVersion = `deai_${image.filename}`;
+        const ext = path.extname(image.filename);
+        const baseName = path.basename(image.filename, ext);
+        const deaiFilename = `${baseName}_deai${ext}`;
+        const uploadsDir = this.getUploadsDir();
+        const sourcePath = path.join(uploadsDir, image.filename);
+        const destPath = path.join(uploadsDir, deaiFilename);
+        if (fs.existsSync(sourcePath)) {
+            await copyFile(sourcePath, destPath);
+        }
+        image.deaiVersion = deaiFilename;
         this.uploadedImages.set(id, image);
         return image;
     }
