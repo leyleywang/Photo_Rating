@@ -7,16 +7,20 @@
     
     <div class="waterfall-container">
       <div 
-        v-for="image in highScoreImages" 
+        v-for="image in displayImages" 
         :key="image.id" 
         class="image-card"
         @click="openRatingModal(image)"
       >
         <img 
+          v-if="getImageSrc(image)"
           :src="getImageSrc(image)" 
           :alt="image.originalName"
-          @error="handleImageError($event, image)"
+          class="card-image"
         />
+        <div v-else class="sample-image-placeholder">
+          🖼️
+        </div>
         <div class="image-card-info">
           <div class="image-card-rating">
             <span class="rating-badge">{{ image.rating?.total || '--' }}</span>
@@ -57,11 +61,15 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { imageApi } from '../api/image'
 import ImageRatingModal from '../components/ImageRatingModal.vue'
 
-const highScoreImages = ref([])
+const STORAGE_KEY = 'photo_rating_uploaded_images'
+const STORAGE_PREVIEW_KEY = 'photo_rating_previews'
+
+const sampleImages = ref([])
+const uploadedImages = ref([])
 const ratingModalVisible = ref(false)
 const selectedImage = ref(null)
 const selectedImagePreview = ref('')
@@ -70,21 +78,26 @@ const loading = ref(false)
 
 const imagePreviewCache = ref(new Map())
 
-onMounted(async () => {
-  await loadHighScoreImages()
+const displayImages = computed(() => {
+  return [...uploadedImages.value, ...sampleImages.value]
 })
 
-const loadHighScoreImages = async () => {
+onMounted(async () => {
+  await loadSampleImages()
+  loadUploadedImagesFromStorage()
+})
+
+const loadSampleImages = async () => {
   try {
     const response = await imageApi.getHighScoreImages()
-    highScoreImages.value = response.data || []
+    sampleImages.value = response.data || []
   } catch (error) {
     console.error('加载高分图片失败:', error)
-    highScoreImages.value = getMockHighScoreImages()
+    sampleImages.value = getMockSampleImages()
   }
 }
 
-const getMockHighScoreImages = () => [
+const getMockSampleImages = () => [
   {
     id: 'sample1',
     filename: 'sample1.jpg',
@@ -133,8 +146,43 @@ const getImageSrc = (image) => {
   return ''
 }
 
-const handleImageError = (event, image) => {
-  event.target.style.display = 'none'
+const loadUploadedImagesFromStorage = () => {
+  try {
+    const storedImages = localStorage.getItem(STORAGE_KEY)
+    const storedPreviews = localStorage.getItem(STORAGE_PREVIEW_KEY)
+    
+    if (storedImages) {
+      uploadedImages.value = JSON.parse(storedImages)
+    }
+    
+    if (storedPreviews) {
+      const previews = JSON.parse(storedPreviews)
+      previews.forEach(item => {
+        imagePreviewCache.value.set(item.id, item.preview)
+      })
+    }
+  } catch (error) {
+    console.error('从localStorage加载图片失败:', error)
+  }
+}
+
+const saveUploadedImagesToStorage = () => {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(uploadedImages.value))
+    
+    const previews = []
+    uploadedImages.value.forEach(image => {
+      if (imagePreviewCache.value.has(image.id)) {
+        previews.push({
+          id: image.id,
+          preview: imagePreviewCache.value.get(image.id)
+        })
+      }
+    })
+    localStorage.setItem(STORAGE_PREVIEW_KEY, JSON.stringify(previews))
+  } catch (error) {
+    console.error('保存图片到localStorage失败:', error)
+  }
 }
 
 const triggerUpload = () => {
@@ -173,7 +221,8 @@ const handleFileSelect = async (event) => {
       imagePreviewCache.value.set(uploadedImage.id, preview)
     }
     
-    highScoreImages.value.unshift(rateResponse.data)
+    uploadedImages.value.unshift(rateResponse.data)
+    saveUploadedImagesToStorage()
   } catch (error) {
     console.error('上传或评分失败:', error)
     
@@ -215,7 +264,8 @@ const handleFileSelect = async (event) => {
     }
     
     ratingModalVisible.value = true
-    highScoreImages.value.unshift(selectedImage.value)
+    uploadedImages.value.unshift(selectedImage.value)
+    saveUploadedImagesToStorage()
   } finally {
     loading.value = false
     if (fileInput.value) {
@@ -234,3 +284,13 @@ const openRatingModal = (image) => {
   ratingModalVisible.value = true
 }
 </script>
+
+<style scoped>
+.card-image {
+  width: 100%;
+  display: block;
+  background: var(--bg-secondary);
+  min-height: 150px;
+  object-fit: cover;
+}
+</style>

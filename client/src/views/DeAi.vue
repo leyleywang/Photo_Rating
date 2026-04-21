@@ -39,18 +39,25 @@
         >
           <div class="image-list-preview">
             <div class="deai-image-box">
+              <div class="image-label-small">原图</div>
               <img 
+                v-if="getImageSrc(image, 'original')"
                 :src="getImageSrc(image, 'original')" 
                 alt="Original"
-                @error="handleImageError($event, image, 'original')"
+                class="deai-preview-image"
               />
+              <div v-else class="image-placeholder">🖼️</div>
             </div>
             <div class="deai-image-box">
+              <div class="image-label-small">去AI味</div>
               <img 
+                v-if="getImageSrc(image, 'deai')"
                 :src="getImageSrc(image, 'deai')" 
                 alt="DeAI"
-                @error="handleImageError($event, image, 'deai')"
+                class="deai-preview-image"
               />
+              <div v-else-if="!image.deaiVersion" class="image-placeholder pending">⏳</div>
+              <div v-else class="image-placeholder">🖼️</div>
             </div>
           </div>
           <div class="image-list-info">
@@ -84,6 +91,9 @@ import { ref, onMounted } from 'vue'
 import { imageApi } from '../api/image'
 import DeAiModal from '../components/DeAiModal.vue'
 
+const STORAGE_KEY = 'photo_rating_deai_images'
+const STORAGE_PREVIEW_KEY = 'photo_rating_deai_previews'
+
 const deaiImages = ref([])
 const deaiModalVisible = ref(false)
 const selectedImage = ref(null)
@@ -96,15 +106,76 @@ const imagePreviewCache = ref(new Map())
 
 onMounted(async () => {
   await loadDeaiImages()
+  loadDeaiImagesFromStorage()
 })
 
 const loadDeaiImages = async () => {
   try {
     const response = await imageApi.getDeaiImages()
-    deaiImages.value = response.data || []
+    if (response.data && response.data.length > 0) {
+      response.data.forEach(img => {
+        const exists = deaiImages.value.find(localImg => localImg.id === img.id)
+        if (!exists) {
+          deaiImages.value.push(img)
+        }
+      })
+    }
   } catch (error) {
     console.error('加载去AI味图片失败:', error)
-    deaiImages.value = []
+  }
+}
+
+const loadDeaiImagesFromStorage = () => {
+  try {
+    const storedImages = localStorage.getItem(STORAGE_KEY)
+    const storedPreviews = localStorage.getItem(STORAGE_PREVIEW_KEY)
+    
+    if (storedImages) {
+      const localImages = JSON.parse(storedImages)
+      localImages.forEach(localImg => {
+        const exists = deaiImages.value.find(img => img.id === localImg.id)
+        if (!exists) {
+          deaiImages.value.unshift(localImg)
+        }
+      })
+    }
+    
+    if (storedPreviews) {
+      const previews = JSON.parse(storedPreviews)
+      previews.forEach(item => {
+        imagePreviewCache.value.set(item.key, item.preview)
+      })
+    }
+  } catch (error) {
+    console.error('从localStorage加载去AI味图片失败:', error)
+  }
+}
+
+const saveDeaiImagesToStorage = () => {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(deaiImages.value))
+    
+    const previews = []
+    deaiImages.value.forEach(image => {
+      const originalKey = `${image.id}-original`
+      const deaiKey = `${image.id}-deai`
+      
+      if (imagePreviewCache.value.has(originalKey)) {
+        previews.push({
+          key: originalKey,
+          preview: imagePreviewCache.value.get(originalKey)
+        })
+      }
+      if (imagePreviewCache.value.has(deaiKey)) {
+        previews.push({
+          key: deaiKey,
+          preview: imagePreviewCache.value.get(deaiKey)
+        })
+      }
+    })
+    localStorage.setItem(STORAGE_PREVIEW_KEY, JSON.stringify(previews))
+  } catch (error) {
+    console.error('保存去AI味图片到localStorage失败:', error)
   }
 }
 
@@ -120,10 +191,6 @@ const getImageSrc = (image, type = 'original') => {
     return `http://localhost:3000/uploads/${image.deaiVersion}`
   }
   return ''
-}
-
-const handleImageError = (event, image, type) => {
-  event.target.style.display = 'none'
 }
 
 const triggerUpload = () => {
@@ -166,8 +233,10 @@ const processFile = async (file) => {
     selectedImage.value = uploadResponse.data
     
     if (preview) {
-      imagePreviewCache.value.set(`${selectedImage.value.id}-original`, preview)
-      imagePreviewCache.value.set(`${selectedImage.value.id}-deai`, preview)
+      const originalKey = `${selectedImage.value.id}-original`
+      const deaiKey = `${selectedImage.value.id}-deai`
+      imagePreviewCache.value.set(originalKey, preview)
+      imagePreviewCache.value.set(deaiKey, preview)
     }
     
     deaiModalVisible.value = true
@@ -192,8 +261,10 @@ const processFile = async (file) => {
     }
     
     if (preview) {
-      imagePreviewCache.value.set(`${selectedImage.value.id}-original`, preview)
-      imagePreviewCache.value.set(`${selectedImage.value.id}-deai`, preview)
+      const originalKey = `${selectedImage.value.id}-original`
+      const deaiKey = `${selectedImage.value.id}-deai`
+      imagePreviewCache.value.set(originalKey, preview)
+      imagePreviewCache.value.set(deaiKey, preview)
     }
     
     deaiModalVisible.value = true
@@ -217,10 +288,13 @@ const openDeaiModal = (image) => {
 }
 
 const handleDeaiComplete = (image) => {
-  const exists = deaiImages.value.find(img => img.id === image.id)
-  if (!exists) {
+  const exists = deaiImages.value.findIndex(img => img.id === image.id)
+  if (exists === -1) {
     deaiImages.value.unshift(image)
+  } else {
+    deaiImages.value[exists] = image
   }
+  saveDeaiImagesToStorage()
 }
 
 const formatDate = (date) => {
@@ -235,3 +309,39 @@ const formatDate = (date) => {
   })
 }
 </script>
+
+<style scoped>
+.deai-preview-image {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  background: var(--bg-secondary);
+}
+
+.image-label-small {
+  position: absolute;
+  top: 4px;
+  left: 4px;
+  background: rgba(0, 0, 0, 0.6);
+  color: white;
+  font-size: 0.6rem;
+  padding: 2px 6px;
+  border-radius: 4px;
+  z-index: 1;
+}
+
+.image-placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  background: var(--bg-secondary);
+  font-size: 1.5rem;
+  color: var(--text-secondary);
+}
+
+.image-placeholder.pending {
+  opacity: 0.5;
+}
+</style>
