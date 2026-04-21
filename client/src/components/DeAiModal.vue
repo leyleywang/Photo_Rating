@@ -11,18 +11,33 @@
             <div class="deai-images-grid">
               <div class="deai-image-box">
                 <div class="deai-image-label">原图</div>
-                <img :src="imagePreview" alt="Original" />
+                <img 
+                  v-if="originalImageSrc"
+                  :src="originalImageSrc" 
+                  alt="Original" 
+                />
+                <div v-else class="sample-image-placeholder">🖼️</div>
               </div>
               <div class="deai-image-box">
                 <div class="deai-image-label">去AI味后</div>
-                <img :src="deaiPreview" alt="DeAI Version" />
+                <img 
+                  v-if="deaiImageSrc"
+                  :src="deaiImageSrc" 
+                  alt="DeAI Version" 
+                />
+                <div v-else class="sample-image-placeholder">🖼️</div>
               </div>
             </div>
           </div>
           
           <div v-else class="deai-modal-content">
             <div class="deai-preview">
-              <img :src="imagePreview" alt="Uploaded image" />
+              <img 
+                v-if="originalImageSrc"
+                :src="originalImageSrc" 
+                alt="Uploaded image" 
+              />
+              <div v-else class="sample-image-placeholder">🖼️</div>
             </div>
             
             <div class="deai-actions">
@@ -43,7 +58,7 @@
 </template>
 
 <script setup>
-import { ref, watch } from 'vue'
+import { ref, watch, computed } from 'vue'
 import { imageApi } from '../api/image'
 
 const props = defineProps({
@@ -65,7 +80,19 @@ const emit = defineEmits(['update:visible', 'close', 'deai-complete'])
 
 const processing = ref(false)
 
-const deaiPreview = ref('')
+const originalImageSrc = computed(() => {
+  if (props.image?.filename) {
+    return `http://localhost:3000/uploads/${props.image.filename}`
+  }
+  return props.imagePreview || ''
+})
+
+const deaiImageSrc = computed(() => {
+  if (props.image?.deaiVersion) {
+    return `http://localhost:3000/uploads/${props.image.deaiVersion}`
+  }
+  return ''
+})
 
 const close = () => {
   emit('update:visible', false)
@@ -80,7 +107,6 @@ const handleDeai = async () => {
     const response = await imageApi.deaiImage(props.image.id)
     if (response.data?.deaiVersion) {
       props.image.deaiVersion = response.data.deaiVersion
-      deaiPreview.value = props.imagePreview
       emit('deai-complete', props.image)
     }
   } catch (error) {
@@ -93,11 +119,6 @@ const handleDeai = async () => {
 watch(() => props.visible, (newVal) => {
   if (newVal) {
     processing.value = false
-    if (props.image?.deaiVersion) {
-      deaiPreview.value = props.imagePreview
-    } else {
-      deaiPreview.value = ''
-    }
   }
 })
 </script>

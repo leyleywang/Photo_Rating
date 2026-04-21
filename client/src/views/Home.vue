@@ -137,9 +137,6 @@ const getMockSampleImages = () => [
 ]
 
 const getImageSrc = (image) => {
-  if (imagePreviewCache.value.has(image.id)) {
-    return imagePreviewCache.value.get(image.id)
-  }
   if (image.filename && !image.id.startsWith('sample')) {
     return `http://localhost:3000/uploads/${image.filename}`
   }

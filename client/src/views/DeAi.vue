@@ -188,10 +188,6 @@ const saveDeaiImagesToStorage = () => {
 }
 
 const getImageSrc = (image, type = 'original') => {
-  const cacheKey = `${image.id}-${type}`
-  if (imagePreviewCache.value.has(cacheKey)) {
-    return imagePreviewCache.value.get(cacheKey)
-  }
   if (type === 'original' && image.filename) {
     return `http://localhost:3000/uploads/${image.filename}`
   }

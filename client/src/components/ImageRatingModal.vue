@@ -114,11 +114,11 @@ const emit = defineEmits(['update:visible', 'close'])
 const generatingPrompt = ref(false)
 
 const displayImage = computed(() => {
-  if (props.imagePreview) {
-    return props.imagePreview
-  }
   if (props.image?.filename && !props.image?.id?.startsWith('sample')) {
     return `http://localhost:3000/uploads/${props.image.filename}`
+  }
+  if (props.imagePreview) {
+    return props.imagePreview
   }
   return ''
 })
