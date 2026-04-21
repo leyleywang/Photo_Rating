@@ -85,32 +85,30 @@ body::before {
   padding: 8px 16px;
   text-decoration: none;
   color: var(--text-secondary);
-  border-radius: 12px;
+  border-radius: 0;
   transition: all 0.3s ease;
   position: relative;
   max-width: 50%;
 }
 
 .tab-item:hover {
-  background: rgba(0, 212, 255, 0.1);
   color: var(--accent-primary);
 }
 
 .tab-item.active {
   color: var(--accent-primary);
+  background: rgba(0, 212, 255, 0.15);
 }
 
 .tab-item.active::before {
   content: '';
   position: absolute;
   top: 0;
-  left: 50%;
-  transform: translateX(-50%);
-  width: 40px;
+  left: 0;
+  right: 0;
   height: 3px;
   background: var(--accent-gradient);
-  border-radius: 0 0 3px 3px;
-  box-shadow: var(--glow-primary);
+  box-shadow: 0 0 10px rgba(0, 212, 255, 0.5);
 }
 
 .tab-item.active .tab-icon {

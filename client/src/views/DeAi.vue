@@ -26,13 +26,13 @@
       @change="handleFileSelect"
     />
     
-    <div v-if="deaiImages.length > 0" class="image-list-section">
+    <div v-if="sortedDeaiImages.length > 0" class="image-list-section">
       <h2 class="image-list-title">
         <span>📚</span> 已处理图片
       </h2>
       <div class="image-list-grid">
         <div 
-          v-for="image in deaiImages" 
+          v-for="image in sortedDeaiImages" 
           :key="image.id" 
           class="image-list-item"
           @click="openDeaiModal(image)"
@@ -87,7 +87,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { imageApi } from '../api/image'
 import DeAiModal from '../components/DeAiModal.vue'
 
@@ -103,6 +103,14 @@ const loading = ref(false)
 const dragover = ref(false)
 
 const imagePreviewCache = ref(new Map())
+
+const sortedDeaiImages = computed(() => {
+  return [...deaiImages.value].sort((a, b) => {
+    const dateA = a.uploadDate ? new Date(a.uploadDate).getTime() : 0
+    const dateB = b.uploadDate ? new Date(b.uploadDate).getTime() : 0
+    return dateB - dateA
+  })
+})
 
 onMounted(async () => {
   await loadDeaiImages()
@@ -135,7 +143,7 @@ const loadDeaiImagesFromStorage = () => {
       localImages.forEach(localImg => {
         const exists = deaiImages.value.find(img => img.id === localImg.id)
         if (!exists) {
-          deaiImages.value.unshift(localImg)
+          deaiImages.value.push(localImg)
         }
       })
     }
@@ -239,6 +247,12 @@ const processFile = async (file) => {
       imagePreviewCache.value.set(deaiKey, preview)
     }
     
+    const exists = deaiImages.value.find(img => img.id === selectedImage.value.id)
+    if (!exists) {
+      deaiImages.value.unshift(selectedImage.value)
+      saveDeaiImagesToStorage()
+    }
+    
     deaiModalVisible.value = true
   } catch (error) {
     console.error('上传失败:', error)
@@ -265,6 +279,12 @@ const processFile = async (file) => {
       const deaiKey = `${selectedImage.value.id}-deai`
       imagePreviewCache.value.set(originalKey, preview)
       imagePreviewCache.value.set(deaiKey, preview)
+    }
+    
+    const exists = deaiImages.value.find(img => img.id === selectedImage.value.id)
+    if (!exists) {
+      deaiImages.value.unshift(selectedImage.value)
+      saveDeaiImagesToStorage()
     }
     
     deaiModalVisible.value = true
